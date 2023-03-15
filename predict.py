@@ -97,8 +97,10 @@ if __name__ == "__main__":
     # Load weights
     if user_stated_device == "cuda":
         netG.load_state_dict(torch.load(pretrained_dir))
+        print("Using CUDA")
     else:
         netG.load_state_dict(torch.load(pretrained_dir, map_location=torch.device('cpu')))
+        print ("Using CPU")
 
     # Single file
     if os.path.isfile(input_path):
