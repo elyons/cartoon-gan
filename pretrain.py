@@ -11,12 +11,13 @@ from tqdm import tqdm
 
 
 def train():
+    torch.cuda.empty_cache()
     torch.manual_seed(1337)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Config
-    batch_size = 16
-    image_size = 256
+    batch_size = 8
+    image_size = 1024
     learning_rate = 1e-3
     beta1, beta2 = (.5, .99)
     weight_decay = 1e-3
@@ -24,8 +25,8 @@ def train():
 
     # Dataloaders
     real_dataloader = get_dataloader(
-        "./datasets/real_images/flickr_nuneaton/", size=image_size, bs=batch_size, trfs=get_no_aug_transform())
-
+        "./datasets/real_images/matrix/", size=image_size, bs=batch_size, trfs=get_no_aug_transform())
+    print(real_dataloader)
     # Lists to keep track of progress
     G_losses = []
     iters = 0
@@ -60,7 +61,6 @@ def train():
 
             # Format batch.
             real_data = real_data.to(device)
-
             with torch.cuda.amp.autocast():
                 # Generate image
                 generated_data = netG(real_data)
