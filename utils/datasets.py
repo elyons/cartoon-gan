@@ -105,7 +105,7 @@ class ImageDataset(Dataset):
         return len(self.root_files)
 
     def __getitem__(self, idx):
-        img = Image.open(os.path.join(self.root_dir, self.root_files[idx]))
+        img = Image.open(os.path.join(self.root_dir, self.root_files[idx])).convert('RGB')
         if self.transform:
             img = self.transform(img)
 
