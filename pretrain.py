@@ -3,7 +3,7 @@ from utils.helpers import unnormalize
 import torch
 from torch.optim import AdamW
 import torchvision.utils as vutils
-
+from torch.utils.tensorboard import SummaryWriter
 from utils.loss import ContentLoss
 from utils.datasets import get_dataloader
 from models.generator import Generator
@@ -17,8 +17,8 @@ def train():
 
     # Config
     batch_size = 8
-    image_size = 1024
-    learning_rate = 1e-3
+    image_size = 256
+    learning_rate = 1e-4
     beta1, beta2 = (.5, .99)
     weight_decay = 1e-3
     epochs = 10
@@ -45,6 +45,10 @@ def train():
 
     # Loss functions
     content_loss = ContentLoss().to(device)
+
+    #logger
+    writer = SummaryWriter()
+
 
     print("Starting Training Loop...")
     # For each epoch.
@@ -82,16 +86,17 @@ def train():
             G_losses.append(errG.item())
 
             # Check how the generator is doing by saving G's output on tracked_images
-            if iters % 200 == 0:
+            if iters % 50 == 0:
                 with torch.no_grad():
                     fake = netG(tracked_images).detach().cpu()
                 vutils.save_image(unnormalize(
                     fake), f"images/{epoch}_{i}.png", padding=2)
                 torch.save(netG, f"checkpoints/pretrained_netG_e{epoch}_i{iters}_l{errG.item()}.pth")
-
+                writer.add_scalar('Loss/pretrain', errG.item(), iters)
             iters += 1
 
     torch.save(netG.state_dict(), f"checkpoints/pretrained_netG_e{epoch}_i{iters}_l{errG.item()}.pth")
+    torch.save(netG.state_dict(), f"checkpoints/pretrained_netG.pth")
 
 if __name__ == "__main__":
     train()
