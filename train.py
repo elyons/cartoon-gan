@@ -4,6 +4,7 @@ from torch.optim import AdamW
 
 from utils.helpers import unnormalize
 import torchvision.utils as vutils
+from torch.utils.tensorboard import SummaryWriter
 from utils.loss import ContentLoss, AdversialLoss
 from utils.transforms import get_pair_transforms
 from utils.datasets import get_dataloader
@@ -12,6 +13,7 @@ from models.generator import Generator
 
 from datetime import datetime
 import numpy as np
+from tqdm import tqdm
 
 torch.backends.cudnn.benchmark = True
 
@@ -23,16 +25,16 @@ def train():
     # Config
     batch_size = 32
     image_size = 256
-    learning_rate = 1e-4
+    learning_rate = 1e-5
     beta1, beta2 = (.5, .99)
-    weight_decay = 1e-4
+    weight_decay = 1e-3 
     epochs = 1000
 
     # Models
     netD = Discriminator().to(device)
     netG = Generator().to(device)
     # Here you should load the pretrained G
-    netG.load_state_dict(torch.load("./checkpoints/pretrained_netG.pth").state_dict())
+    netG.load_state_dict(torch.load("./checkpoints/pretrain/pretrained_netG.pth"))#.state_dict())
 
     optimizerD = AdamW(netD.parameters(), lr=learning_rate, betas=(beta1, beta2), weight_decay=weight_decay)
     optimizerG = AdamW(netG.parameters(), lr=learning_rate, betas=(beta1, beta2), weight_decay=weight_decay)
@@ -49,8 +51,8 @@ def train():
     BCE_loss     = nn.BCEWithLogitsLoss().to(device)
 
     # Dataloaders
-    real_dataloader    = get_dataloader("./datasets/real_images/flickr30k_images/",           size = image_size, bs = batch_size)
-    cartoon_dataloader = get_dataloader("./datasets/cartoon_images_smoothed/Studio Ghibli",   size = image_size, bs = batch_size, trfs=get_pair_transforms(image_size))
+    real_dataloader    = get_dataloader("./datasets/real_images/matrix/",           size = image_size, bs = batch_size)
+    cartoon_dataloader = get_dataloader("./datasets/cartoon_images_smoothed/akira",   size = image_size, bs = batch_size, trfs=get_pair_transforms(image_size))
 
     # --------------------------------------------------------------------------------------------- #
     # Training Loop
@@ -63,12 +65,16 @@ def train():
 
     tracked_images = next(iter(real_dataloader)).to(device)
 
+
+    #logger
+    writer = SummaryWriter()
+
     print("Starting Training Loop...")
     # For each epoch.
     for epoch in range(epochs):
         print("training epoch ", epoch)
         # For each batch in the dataloader.
-        for i, (cartoon_edge_data, real_data) in enumerate(zip(cartoon_dataloader, real_dataloader)):
+        for i, (cartoon_edge_data, real_data) in enumerate(tqdm(zip(cartoon_dataloader, real_dataloader), desc=f"Training epoch {epoch}")):
 
             ############################
             # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
@@ -118,6 +124,8 @@ def train():
                 generated_pred = netD(generated_data) #.view(-1)
 
                 # Calculate G's loss based on this output
+                # Note:  EL: content_loss should be small, even while style changes
+                #        EL: BCE - Binary Cross Entrop loss between model output and cartoon labels should be small
                 errG = BCE_loss(generated_pred, cartoon_labels) + content_loss(generated_data, real_data)
 
             # Calculate gradients for G
@@ -140,17 +148,22 @@ def train():
             if iters % 200 == 0:
                 with torch.no_grad():
                     fake = netG(tracked_images)
-                vutils.save_image(unnormalize(fake), f"images/{epoch}_{i}.png", padding=2)
-                with open("images/log.txt", "a+") as f:
+                vutils.save_image(unnormalize(fake), f"images/train/{epoch}_{i}.png", padding=2)
+                with open("images/train/log.txt", "a+") as f:
                     f.write(f"{datetime.now().isoformat(' ', 'seconds')}\tD: {np.mean(D_losses)}\tG: {np.mean(G_losses)}\n")
                 D_losses = []
                 G_losses = []
 
             if iters % 1000 == 0:
                 torch.save(netG.state_dict(), f"checkpoints/netG_e{epoch}_i{iters}_l{errG.item()}.pth")
-                torch.save(netD.state_dict(), f"checkpoints/netD_e{epoch}_i{iters}_l{errG.item()}.pth")
+                torch.save(netD.state_dict(), f"checkpoints/netD_e{epoch}_i{iters}_l{errD.item()}.pth")
+                writer.add_scalar('errG', errG.item(), iters)
+                writer.add_scalar('errD', errD.item(), iters)
 
             iters += 1
+    # Dump final models
+    torch.save(netG.state_dict(), f"checkpoints/trained_netG.pth")
+    torch.save(netD.state_dict(), f"checkpoints/trained_netD.pth")
 
 
 
